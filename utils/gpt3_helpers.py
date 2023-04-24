@@ -217,13 +217,13 @@ def trigger_modal(channel_id, image_url, title):  # Update the function paramete
     except Exception as e:
         print(f"Error opening modal: {e}")
 
-# 
 def create_image(prompt):
+    """Run Replicate Model and return URL from config"""
     print("Image Prompt: " + prompt)
-    output = rep.run(
-        """cjwbw/kandinsky-2:65a15f6e3c538ee4adf5142411455308926714f7d3f5c940d9f7bc519e0e5c1a""",
-        input={"prompt": prompt}
-    )
+    model_id = ("cjwbw/kandinsky-2:"
+                "65a15f6e3c538ee4adf5142411455308926714f7d3f5c940d9f7bc519e0e5c1a")
+    print(rep.run(model_id, input={"prompt": prompt}))
+    output = rep.run(model_id, input={"prompt": prompt})
     url = generate_image_url(download_and_save_image(output))
     return url
 

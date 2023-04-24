@@ -80,19 +80,17 @@ try:
         channel_id = command["channel_id"]  # Get the channel ID from the command
         user_id = command["user_id"]
         username = get_username(user_id,members)
+        respond(text="Creating " + command["text"] + ", please wait...")
         image_url = create_image(user_prompt)
-        
         if image_url:
-            # Send an initial message to the user
-            respond(text="Processing your image, please wait...")
-
             # Trigger the modal after the image is ready
             trigger_modal(channel_id, image_url, f"{username}: {user_prompt}")
               # Pass the channel_id here
         else:
             respond(text="Failed to create an image. Please try again.")
 
-    @app.message(".*")
+    @app.message("U04DG1YC0VC")
+    #@app.message(".*") - Only Responed to mentions for now
     def feed_message_to_openai(message, say, ack):
         print("Feed message to OpenAI called")
         logger = logging.getLogger(__name__)

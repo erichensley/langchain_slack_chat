@@ -1,5 +1,6 @@
 import logging
 import os
+from utils.file_handler import get_messages_file_path
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Set up logging
@@ -24,3 +25,13 @@ def setup_logging():
     logger.addHandler(stream_handler)
 
     return logger
+
+def log_message(user_id: str, user: str, message_text: str, response_text: str):
+    logger = logging.getLogger(__name__)
+    with open(get_messages_file_path(), "a") as log_file:
+        log_file.write(f"{user}: {message_text}\n")
+        if response_text is not None:
+            log_file.write(f"AI: {response_text}\n")
+    logger.info(f"User ID: {user_id}")
+    if response_text is not None:
+        logger.info(f"OpenAI Response: {response_text}")

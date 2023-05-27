@@ -7,7 +7,7 @@ from slack_sdk import WebClient
 from utils.logging import setup_logging, log_message
 from utils.gpt3_helpers import get_username, replace_user_ids_with_names
 from utils.file_handler import get_messages_file_path, read_from_file
-from utils.image_handler import trigger_modal, create_image, create_custom_images
+from utils.image_handler import trigger_image_modal, create_image, create_custom_images
 from utils.langchain_handler import LangchainHandler
 
 # Load API keys
@@ -47,25 +47,28 @@ def feed_message_to_openai(message, say, ack):
 @app.message(".*")
 def feed_message_to_openai(message, ack):
     ack()
-    langchain_handler.handle_message(message, members)
+    #langchain_handler.handle_message(message, members)
 
 @app.command("/image")
 def make_image(ack, respond, command):
     ack()
     user_prompt = command["text"]
     channel_id = command["channel_id"]
+    user_id = command["user_id"]
+    username = get_username(user_id,members)
     respond(text="Creating " + command["text"] + ", please wait...")
+    title = username + ": " + command["text"]
     image_url = langchain_handler.create_image(user_prompt)
     if image_url:
-        langchain_handler.trigger_modal(channel_id, image_url, user_prompt)
+        trigger_image_modal(channel_id, image_url, title)
     else:
         respond(text="Failed to create an image. Please try again.")
 
 @app.command("/cimage")
 def open_custom_image_modal(ack, body, client):
     ack()
-    langchain_handler.trigger_modal(body["channel_id"], members)
-
+    #langchain_handler.trigger_modal(body["channel_id"], members)'')
+    langchain_handler.open_custom_image_modal(ack, body, client)
 @app.view("")
 def handle_modal_submission(ack, body, client, logger):
     ack()
@@ -74,5 +77,6 @@ def handle_modal_submission(ack, body, client, logger):
 if __name__ == "__main__":
     response = app.client.users_list()
     members = response["members"]
+    langchain_handler.update_members(members)
     handler = SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
     handler.start()

@@ -14,6 +14,7 @@ from langchain.tools import tool
 from utils.file_handler import load_json, read_from_file
 from utils.gpt3_helpers import get_username, replace_user_ids_with_names
 from utils.logging import setup_logging, log_message
+from utils.image_handler import create_custom_images, create_image, trigger_image_modal
 
 # Set up Prompt
 prompt = read_from_file("config/prompt.txt").strip()
@@ -114,7 +115,11 @@ agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, ve
 class LangchainHandler:
     def __init__(self):
         self.models = load_json("config/models.json")
-        self.user_channel_dict = {}
+        self.user_dict = {}
+        self.slack_members = {}
+
+    def update_members(self, new_value):
+        self.slack_members = new_value
 
     def handle_message(self, message, members):
         user = replace_user_ids_with_names(message["user"], members)
@@ -127,14 +132,80 @@ class LangchainHandler:
     def create_image(self, user_prompt):
         return create_image(user_prompt)
 
-    def trigger_modal(self, channel_id, members, image_url=None, prompt=None):
-        if image_url:
-            trigger_modal(channel_id, image_url, f"{get_username(user_id, members)}: {user_prompt}")
-        else:
-            trigger_modal(channel_id)
+
+    def open_custom_image_modal(self, ack, body, client):
+        ack()
+        #Store ChAanel ID and User ID in a dictionary
+        self.user_dict[body['user_id']] = body['channel_id']
+        def generate_block(model_name, parameter, details):
+            block = {
+                "type": "input",
+                "block_id": f'{model_name}_{parameter}',
+                "label": {"type": "plain_text", "text": parameter.capitalize()},
+                "element": {},
+                "hint": {"type": "plain_text", "text": details.get("description", "")}
+            }
+            if details["type"] in ["text", "string", "integer", "number"]:
+                block["element"] = {
+                    "type": "plain_text_input",
+                    "placeholder": {"type": "plain_text", "text": str(details["default"])},
+                    "initial_value": str(details["default"])
+                }
+            elif details["type"] == "dropdown":
+                block["element"] = {
+                    "type": "static_select",
+                    "placeholder": {"type": "plain_text", "text": "Select an option"},
+                    "options": [{"text": {"type": "plain_text", "text": str(option)}, "value": str(option)} for option in details["options"]],
+                    "initial_option": {"text": {"type": "plain_text", "text": str(details["default"])}, "value": str(details["default"])}
+                }
+            else:
+                raise ValueError(f"Unknown detail type: {details['type']}")
+            return block
+
+        # Build the modal view based on the models
+        blocks = [
+            {
+                "type": "input",
+                "block_id": "model_selection",
+                "label": {"type": "plain_text", "text": "Select model"},
+                "element": {
+                    "type": "static_select",
+                    "placeholder": {"type": "plain_text", "text": "Select a model"},
+                    "options": [{"text": {"type": "plain_text", "text": name}, "value": name} for name in self.models.keys()],
+                    "initial_option": {"text": {"type": "plain_text", "text": "Kandinsky 2"}, "value": "Kandinsky 2"}  # Set default model
+                }
+            },
+        ]
+        for model_name, parameters in self.models.items():
+            for parameter, details in parameters.items():
+                if parameter == "_model_id":
+                    continue  # skip the model ID
+                block = generate_block(model_name, parameter, details)
+                blocks.append(block)
+
+        client.views_open(
+            trigger_id=body["trigger_id"],
+            view={
+                "type": "modal",
+                "title": {
+                    "type": "plain_text",
+                    "text": "Custom Image",
+                    "emoji": True
+                },
+                "submit": {
+                    "type": "plain_text",
+                    "text": "Submit",
+                    "emoji": True
+                },
+                "blocks": blocks
+            }
+        )
 
     def handle_modal_submission(self, body, client, logger):
         try:
+            members = self.slack_members
+            user_id = body['user']['id']
+            username = get_username(user_id, members)
             values = body['view']['state']['values']
             logger.info(f"Values: {values}")
             model_selection_block_id = "model_selection"
@@ -148,9 +219,9 @@ class LangchainHandler:
                     parameter_value = parameter_details[parameter_action_id].get('value')
                     if parameter_value is None:
                         parameter_value = parameter_details[parameter_action_id]['selected_option']['value']
-                    if models[model_name][parameter_name]["type"] == "integer":
+                    if self.models[model_name][parameter_name]["type"] == "integer":
                         parameter_value = int(parameter_value)
-                    elif models[model_name][parameter_name]["type"] == "number":
+                    elif self.models[model_name][parameter_name]["type"] == "number":
                         parameter_value = float(parameter_value)
                     parameters[parameter_name] = parameter_value
             logger.info(f"Model: {model_name}, parameters: {parameters}")
@@ -163,15 +234,16 @@ class LangchainHandler:
             if user_prompt is None:
                 logger.error("Failed to find prompt")
                 return
-            model_id = models[model_name]["_model_id"]
-            channel_id = self.user_channel_dict.get(body['user']['id'])
+            model_id = self.models[model_name]["_model_id"]
+            """Get the channel ID of the user who submitted the modal"""
+            channel_id = self.user_dict.get(body['user']['id'])
             client.chat_postEphemeral(channel=channel_id, user=user_id, text="Creating " + user_prompt + ", please wait...")
-            urls = create_custom_images(model_id, parameters, models)
+            urls = create_custom_images(model_id, parameters, self.models)
             message = ""
             for url in urls:
                 message += f"{url}\n"
             if url:
-                self.trigger_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}")
+                trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}")
             else:
                 respond(text="Failed to create an image. Please try again.")
         except Exception as e:

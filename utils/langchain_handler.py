@@ -2,7 +2,9 @@ import datetime
 import os
 import sys
 import re
+import copy
 import traceback
+import json
 from typing import List, Union
 from langchain.agents import Tool, AgentExecutor, LLMSingleActionAgent, AgentOutputParser, initialize_agent, AgentType
 from langchain.memory import ConversationBufferMemory
@@ -11,7 +13,7 @@ from langchain.utilities import GoogleSearchAPIWrapper, WikipediaAPIWrapper
 from langchain.schema import AgentAction, AgentFinish, HumanMessage
 from langchain.prompts import BaseChatPromptTemplate
 from langchain.tools import tool
-from utils.file_handler import load_json, read_from_file
+from utils.file_handler import load_json, read_from_file, get_config_file_path
 from utils.gpt3_helpers import get_username, replace_user_ids_with_names
 from utils.logging import setup_logging, log_message
 from utils.image_handler import create_custom_images, create_image, trigger_image_modal
@@ -117,6 +119,7 @@ class LangchainHandler:
         self.models = load_json("config/models.json")
         self.user_dict = {}
         self.slack_members = {}
+        self.last_user_parameters = {}
 
     def update_members(self, new_value):
         self.slack_members = new_value
@@ -135,9 +138,18 @@ class LangchainHandler:
 
     def open_custom_image_modal(self, ack, body, client):
         ack()
-        #Store ChAanel ID and User ID in a dictionary
+        # Store Channel ID and User ID in a dictionary
         self.user_dict[body['user_id']] = body['channel_id']
-        def generate_block(model_name, parameter, details):
+        user_id = body['user_id']
+        print("Last User Parameters:", self.last_user_parameters)
+        print("open_custom_image_modal User ID:", user_id)
+        last_parameters = load_last_used_values(user_id)
+        last_prompt = last_parameters.get("prompt")
+        print("open_custom_image_modal Last Parameters:", last_parameters)
+        print("open_custom_image_modal Last Prompt:", last_prompt)
+
+        def generate_block(model_name, parameter, details, values):
+            initial_value = ""
             block = {
                 "type": "input",
                 "block_id": f'{model_name}_{parameter}',
@@ -145,22 +157,41 @@ class LangchainHandler:
                 "element": {},
                 "hint": {"type": "plain_text", "text": details.get("description", "")}
             }
-            if details["type"] in ["text", "string", "integer", "number"]:
-                block["element"] = {
-                    "type": "plain_text_input",
-                    "placeholder": {"type": "plain_text", "text": str(details["default"])},
-                    "initial_value": str(details["default"])
-                }
-            elif details["type"] == "dropdown":
-                block["element"] = {
-                    "type": "static_select",
-                    "placeholder": {"type": "plain_text", "text": "Select an option"},
-                    "options": [{"text": {"type": "plain_text", "text": str(option)}, "value": str(option)} for option in details["options"]],
-                    "initial_option": {"text": {"type": "plain_text", "text": str(details["default"])}, "value": str(details["default"])}
-                }
-            else:
-                raise ValueError(f"Unknown detail type: {details['type']}")
+            if isinstance(values, dict) and f'{model_name}_{parameter}' in values:
+                parameter_values = values[f'{model_name}_{parameter}']
+                action_id = list(parameter_values.keys())[0]
+                if details["type"] in ["text", "string", "integer", "number"]:
+                    initial_value = str(details["default"])
+                    if 'value' in parameter_values[action_id]:
+                        initial_value = str(parameter_values[action_id]['value'])
+                    block["element"] = {
+                        "type": "plain_text_input",
+                        "placeholder": {"type": "plain_text", "text": initial_value},
+                        "initial_value": initial_value
+                    }
+                elif details["type"] == "dropdown":
+                    options = [{"text": {"type": "plain_text", "text": str(option)}, "value": str(option)} for option in details["options"]]
+                    initial_option = {"text": {"type": "plain_text", "text": str(details["default"])}, "value": str(details["default"])}
+                    if 'selected_option' in parameter_values[action_id]:
+                        initial_option = parameter_values[action_id]['selected_option']
+                    block["element"] = {
+                        "type": "static_select",
+                        "placeholder": {"type": "plain_text", "text": "Select an option"},
+                        "options": options,
+                        "initial_option": initial_option
+                    }
+                elif details["type"] == "prompt":
+                    initial_value = last_prompt or str(details["default"])
+                    block["element"] = {
+                        "type": "plain_text_input",
+                        "placeholder": {"type": "plain_text", "text": initial_value},
+                        "initial_value": initial_value
+                    }
+            print("generate_block Last Prompt:", last_prompt)   
+            print(f"generate_block Generating block: {model_name}_{parameter}")
+            print("generate_block Initial Value:", initial_value)
             return block
+
 
         # Build the modal view based on the models
         blocks = [
@@ -180,9 +211,10 @@ class LangchainHandler:
             for parameter, details in parameters.items():
                 if parameter == "_model_id":
                     continue  # skip the model ID
-                block = generate_block(model_name, parameter, details)
+                block = generate_block(model_name, parameter, details, last_parameters)
                 blocks.append(block)
-
+        # Debug
+        print("Generated Blocks:", blocks)
         client.views_open(
             trigger_id=body["trigger_id"],
             view={
@@ -201,10 +233,13 @@ class LangchainHandler:
             }
         )
 
+
     def handle_modal_submission(self, body, client, logger):
         try:
             members = self.slack_members
             user_id = body['user']['id']
+            #Debug
+            print ("handle_modal_submission user_id: " + user_id)
             username = get_username(user_id, members)
             values = body['view']['state']['values']
             logger.info(f"Values: {values}")
@@ -234,8 +269,12 @@ class LangchainHandler:
             if user_prompt is None:
                 logger.error("Failed to find prompt")
                 return
+
+            # Store the last used parameters and values
+            save_last_used_values(user_id, values)
+            logger.info(f"Last User Parameters: {values}")
+            
             model_id = self.models[model_name]["_model_id"]
-            """Get the channel ID of the user who submitted the modal"""
             channel_id = self.user_dict.get(body['user']['id'])
             client.chat_postEphemeral(channel=channel_id, user=user_id, text="Creating " + user_prompt + ", please wait...")
             urls = create_custom_images(model_id, parameters, self.models)
@@ -245,7 +284,21 @@ class LangchainHandler:
             if url:
                 trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}")
             else:
-                respond(text="Failed to create an image. Please try again.")
+                respond(text="Failed to create an image. Please try again.", client=client)
         except Exception as e:
             logger.error(f"Failed to handle modal submission: {e}")
             traceback.print_exc()
+
+def save_last_used_values(user_id, last_used_values):
+    config_file_path = get_config_file_path(f'{user_id}.json')
+    with open(config_file_path, 'w') as f:
+        json.dump(last_used_values, f)
+        
+
+def load_last_used_values(user_id):
+    try:
+        config_file_path = get_config_file_path(f'{user_id}.json')
+        with open(config_file_path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}  # or some default values

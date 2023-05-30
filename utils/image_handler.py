@@ -74,15 +74,24 @@ def create_custom_images(model_id: str, parameters: Dict[str, str], models):
 
 
 def download_and_save_image(image_url):
-    print("Downloading image...")
-    response = requests.get(image_url, stream=True)
-    response.raise_for_status()
+    try:
+        print("Downloading image...")
+        
+        # If image_url is a list, extract the first URL
+        if isinstance(image_url, list):
+            image_url = image_url[0]
 
-    file_extension = os.path.splitext(image_url)[-1]
-    new_file_name = f"{uuid.uuid4()}{file_extension}"
-    save_path = os.path.join(get_images_path(), new_file_name)
+        response = requests.get(image_url, stream=True)
+        response.raise_for_status()
 
-    with open(save_path, "wb") as file:
-        shutil.copyfileobj(response.raw, file)
+        file_extension = os.path.splitext(image_url)[-1]
+        new_file_name = f"{uuid.uuid4()}{file_extension}"
+        save_path = os.path.join(get_images_path(), new_file_name)
 
-    return new_file_name
+        with open(save_path, "wb") as file:
+            shutil.copyfileobj(response.raw, file)
+
+        return new_file_name
+    except Exception as e:
+        print(f"Failed to download and save image: {e}")
+        return None

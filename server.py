@@ -74,6 +74,34 @@ def handle_modal_submission(ack, body, client, logger):
     ack()
     langchain_handler.handle_modal_submission(body, client, logger)
 
+@app.action("model_selected")
+def handle_model_selection(ack, body, client):
+    ack()
+    selected_model = body['actions'][0]['selected_option']['value']
+    last_parameters = body['view']['state']['values']
+    last_prompt = last_parameters.get("prompt")
+
+    blocks = langchain_handler.generate_modal_blocks(selected_model, last_parameters, last_prompt)
+
+    client.views_update(
+        view_id=body['view']['id'],
+        view={
+            "type": "modal",
+            "title": {
+                "type": "plain_text",
+                "text": "Custom Image",
+                "emoji": True
+            },
+            "submit": {
+                "type": "plain_text",
+                "text": "Submit",
+                "emoji": True
+            },
+            "blocks": blocks
+        }
+    )
+
+
 if __name__ == "__main__":
     response = app.client.users_list()
     members = response["members"]

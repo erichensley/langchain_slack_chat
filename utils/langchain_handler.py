@@ -3,6 +3,7 @@ import os
 import sys
 import re
 import copy
+import typing
 import traceback
 import json
 from typing import List, Union, Dict, Any
@@ -136,11 +137,19 @@ class LangchainHandler:
     def create_image(self, user_prompt):
         return create_image(user_prompt)
 
-    def generate_block(self, model_name, parameter, details, values, last_prompt):
-        #print(f"Generating block for model '{model_name}', parameter '{parameter}'")
-        #print(f"Details: {details}")
-        #print(f"Values: {values}")
-        #print(f"generate_block Values for model '{model_name}': {values}")
+    def generate_block(self, model_name: str, parameter: str, details: Dict[str, Any], values: Dict[str, Any], last_prompt: str) -> Dict[str, Any]:
+        """
+        Function to generate block.
+        :param model_name: The name of the model.
+        :param parameter: The parameter.
+        :param details: The details.
+        :param values: The values.
+        :param last_prompt: The last prompt.
+        :return: The block.
+        """
+        print(f"Generating block for model: {model_name}, parameter: {parameter}")  # Debugging line
+        print(f"Parameter details: {details}")  # Debugging line
+        print(f"Values: {values}")  # Debugging line
         initial_value = ""
         block = {
             "type": "input",
@@ -149,14 +158,14 @@ class LangchainHandler:
             "element": {},
             "hint": {"type": "plain_text", "text": details.get("description", "")}
         }
-        
-        if isinstance(values, dict) and f'{model_name}_{parameter}' in values:
-            parameter_values = values[f'{model_name}_{parameter}']
-            action_id = list(parameter_values.keys())[0]
+        # Check if model_name is in values and parameter is in values[model_name]
+        if isinstance(values, dict) and parameter in values:
+            # Get the value of the parameter
+            parameter_value = values[parameter]
+            print(f"Parameter value: {parameter_value}")  
             if details["type"] in ["text", "string", "integer", "number"]:
                 initial_value = str(details["default"])
-                if 'value' in parameter_values[action_id]:
-                    initial_value = str(parameter_values[action_id]['value'])
+                initial_value = str(parameter_value)
                 block["element"] = {
                     "type": "plain_text_input",
                     "placeholder": {"type": "plain_text", "text": initial_value},
@@ -164,9 +173,7 @@ class LangchainHandler:
                 }
             elif details["type"] == "dropdown":
                 options = [{"text": {"type": "plain_text", "text": str(option)}, "value": str(option)} for option in details["options"]]
-                initial_option = {"text": {"type": "plain_text", "text": str(details["default"])}, "value": str(details["default"])}
-                if 'selected_option' in parameter_values[action_id]:
-                    initial_option = parameter_values[action_id]['selected_option']
+                initial_option = {"text": {"type": "plain_text", "text": str(parameter_value)}, "value": str(parameter_value)}
                 block["element"] = {
                     "type": "static_select",
                     "placeholder": {"type": "plain_text", "text": "Select an option"},
@@ -175,20 +182,20 @@ class LangchainHandler:
                 }
             elif details["type"] == "prompt":
                 initial_value = last_prompt or str(details["default"])
+                initial_value = str(parameter_value)
                 block["element"] = {
                     "type": "plain_text_input",
                     "placeholder": {"type": "plain_text", "text": initial_value},
                     "initial_value": initial_value
                 }
             else:
-                # Default case for unknown types
                 print(f"Unknown type '{details['type']}' for parameter '{parameter}' in model '{model_name}'. Defaulting to 'plain_text_input'.")
                 initial_value = str(details.get("default", ""))
                 block["element"] = {
                     "type": "plain_text_input",
                     "placeholder": {"type": "plain_text", "text": initial_value},
                     "initial_value": initial_value
-            }
+                }
         else:
             print(f"No values found for parameter '{parameter}' in model '{model_name}'. Defaulting to 'plain_text_input'.")
             initial_value = str(details.get("default", ""))
@@ -197,10 +204,8 @@ class LangchainHandler:
                 "placeholder": {"type": "plain_text", "text": initial_value},
                 "initial_value": initial_value
         }
-        #print("generate_block Last Prompt:", last_prompt)   
-        #print(f"generate_block Generating block: {model_name}_{parameter}")
-        #print("generate_block Initial Value:", initial_value)
         return block
+
     
     def open_custom_image_modal(self, ack, body, client):
         ack()
@@ -358,24 +363,33 @@ class LangchainHandler:
 
     def collect_parameters(self, values: Dict[str, Any], model_name: str, user_id: str) -> Dict[str, Any]:
         parameters = {}
-        for parameter_block_id, parameter_details in values.items():
-            if parameter_block_id != self.MODEL_SELECTION_BLOCK_ID:
-                model_name, parameter_name = parameter_block_id.replace("-", " ").split('_', 1)
-                parameter_value = self.get_value_for_parameter(user_id, model_name, parameter_name)
+        for parameter_name, parameter_value in values.items():
+            if parameter_name != 'last_used_model':
                 parameters[parameter_name] = parameter_value
         print("collect_parameters called")
         print(parameters)
         return parameters
 
 
-
 def save_last_used_values(user_id, model_name, values):
     # Load all previously saved values.
     user_values = load_all_values(user_id)
 
+    # Prepare new values dictionary for the model
+    new_values = {}
+    for parameter, parameter_details in values.items():
+        if parameter.startswith(model_name):
+            # For each parameter, get the actual value
+            for action_id, action_details in parameter_details.items():
+                if 'value' in action_details:
+                    # The parameter name is derived by removing the model_name_ prefix
+                    parameter_name = parameter.replace(f"{model_name}_", "")
+                    new_values[parameter_name] = action_details['value']
+
     # Update the values for this model.
-    user_values[model_name] = values
-    print(f"Saved user values: {user_values}")
+    user_values[model_name] = new_values
+    user_values['last_used_model'] = model_name
+
     # Save the updated values.
     with open(get_config_file_path(f'{user_id}.json'), 'w') as file:
         json.dump(user_values, file)
@@ -383,21 +397,7 @@ def save_last_used_values(user_id, model_name, values):
 def load_last_used_values(user_id, model_name):
     last_parameters_all_models = load_all_values(user_id)
     model_parameters = last_parameters_all_models.get(model_name, {})
-    # Construct a dictionary of the model's parameters with the unique identifiers removed
-    last_used_values = {}
-    for key, value in model_parameters.items():
-        # Get the parameter name by splitting at underscores and removing the last part
-        parameter_name_parts = key.split('_')[:-1]
-        # Join the parts together to form the parameter name
-        parameter_name = '_'.join(parameter_name_parts)
-        # Get the parameter value by getting the 'value' field from the value dictionary
-        parameter_value = value.get('type')
-        if parameter_value == 'plain_text_input':
-            last_used_values[parameter_name] = value.get('value')
-        elif parameter_value == 'static_select':
-            last_used_values[parameter_name] = value['selected_option'].get('value')
-    return last_used_values
-
+    return model_parameters
 
 def load_all_values(user_id):
     print("load_all_values called")

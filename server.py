@@ -1,6 +1,7 @@
 import os
 import logging
 import configparser
+import json
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk import WebClient
@@ -77,12 +78,13 @@ def handle_modal_submission(ack, body, client, logger):
 @app.action("model_selected")
 def handle_model_selection(ack, body, client):
     ack()
-    selected_model = body['actions'][0]['selected_option']['value']
     last_parameters = body['view']['state']['values']
     last_prompt = last_parameters.get("prompt")
-
+    selected_model = last_parameters['model_selection']['model_selected']['selected_option']['value']
+    print(f"model_selected Selected model: {selected_model}")
+    print(f"model_selected Last parameters: {last_parameters}")
     blocks = langchain_handler.generate_modal_blocks(selected_model, last_parameters, last_prompt)
-
+    print(f"model_selected Blocks: {blocks}")
     client.views_update(
         view_id=body['view']['id'],
         view={
@@ -105,6 +107,8 @@ def handle_model_selection(ack, body, client):
 if __name__ == "__main__":
     response = app.client.users_list()
     members = response["members"]
+    with open("members.json", "w") as file:
+        json.dump(members, file)
     langchain_handler.update_members(members)
     handler = SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
     handler.start()

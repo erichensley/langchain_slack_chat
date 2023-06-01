@@ -5,7 +5,7 @@ import re
 import copy
 import traceback
 import json
-from typing import List, Union
+from typing import List, Union, Dict, Any
 from langchain.agents import Tool, AgentExecutor, LLMSingleActionAgent, AgentOutputParser, initialize_agent, AgentType
 from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain
@@ -115,6 +115,7 @@ agent = LLMSingleActionAgent(
 agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True)
 
 class LangchainHandler:
+    MODEL_SELECTION_BLOCK_ID = "model_selection" 
     def __init__(self):
         self.models = load_json("config/models.json")
         self.user_dict = {}
@@ -136,7 +137,10 @@ class LangchainHandler:
         return create_image(user_prompt)
 
     def generate_block(self, model_name, parameter, details, values, last_prompt):
-        print(f"Values for model '{model_name}': {values}")
+        #print(f"Generating block for model '{model_name}', parameter '{parameter}'")
+        #print(f"Details: {details}")
+        #print(f"Values: {values}")
+        #print(f"generate_block Values for model '{model_name}': {values}")
         initial_value = ""
         block = {
             "type": "input",
@@ -145,6 +149,7 @@ class LangchainHandler:
             "element": {},
             "hint": {"type": "plain_text", "text": details.get("description", "")}
         }
+        
         if isinstance(values, dict) and f'{model_name}_{parameter}' in values:
             parameter_values = values[f'{model_name}_{parameter}']
             action_id = list(parameter_values.keys())[0]
@@ -202,14 +207,27 @@ class LangchainHandler:
         # Store Channel ID and User ID in a dictionary
         self.user_dict[body['user_id']] = body['channel_id']
         user_id = body['user_id']
-        last_parameters = load_last_used_values(user_id)
-        last_prompt = last_parameters.get("prompt")
 
-        selected_model = last_parameters.get("model_selection", {"JgSo": {"selected_option": {"value": "Kandinsky 2"}}})
-        if isinstance(selected_model, dict):
-            selected_model = selected_model[list(selected_model.keys())[0]]['selected_option']['value']
+        # Load last used values for all models
+        last_parameters_all_models = load_all_values(user_id)
+        print(f"Retrieved last_parameters_all_models: {last_parameters_all_models}")
 
-        blocks = self.generate_modal_blocks(selected_model, last_parameters, last_prompt)
+        # Get last used model
+        selected_model = last_parameters_all_models.get('last_used_model', 'Kandinsky 2')
+        print(f"Open Custom Image Selected model: {selected_model}")
+        last_parameters = load_last_used_values(user_id, selected_model)
+        print(f"Open Custom Image last_parameters: {last_parameters}")
+        # Update the last parameters of the selected model with the current parameters
+        #last_parameters = last_parameters_all_models.get(selected_model,
+        #{}).get(selected_model, {})
+        print(user_id)
+        current_parameters = self.collect_parameters(last_parameters, selected_model, user_id)
+
+        print(f"Retrieved current_parameters: {current_parameters}")
+        last_prompt = current_parameters.get("prompt")
+        print(f"Open_Custom_Image Selected model: {selected_model}")
+
+        blocks = self.generate_modal_blocks(selected_model, current_parameters, last_prompt)
 
         client.views_open(
             trigger_id=body["trigger_id"],
@@ -228,7 +246,8 @@ class LangchainHandler:
                 "blocks": blocks
                 }
             )
-    
+
+
     def generate_blocks_for_model(self, model_name, last_parameters, last_prompt):
         blocks = []
         parameters = self.models[model_name]
@@ -242,50 +261,34 @@ class LangchainHandler:
     def handle_modal_submission(self, body, client, logger):
         try:
             members = self.slack_members
-            user_id = body['user']['id']
-            #Debug
-            print ("handle_modal_submission user_id: " + user_id)
-            username = get_username(user_id, members)
-            values = body['view']['state']['values']
+            user_id, values = extract_values_from_body(body)
             logger.info(f"Values: {values}")
-            model_selection_block_id = "model_selection"
-            model_selection_action_id = list(values[model_selection_block_id].keys())[0]
-            model_name = values[model_selection_block_id][model_selection_action_id]['selected_option']['value']
-            parameters = {}
-            for parameter_block_id, parameter_details in values.items():
-                if parameter_block_id != model_selection_block_id:
-                    parameter_name = parameter_block_id.replace(model_name + '_', '')
-                    parameter_action_id = list(parameter_details.keys())[0]
-                    parameter_value = parameter_details[parameter_action_id].get('value')
-                    if parameter_value is None:
-                        parameter_value = parameter_details[parameter_action_id]['selected_option']['value']
-                    if self.models[model_name][parameter_name]["type"] == "integer":
-                        parameter_value = int(parameter_value)
-                    elif self.models[model_name][parameter_name]["type"] == "number":
-                        parameter_value = float(parameter_value)
-                    parameters[parameter_name] = parameter_value
+
+            #model_selection_block_id = "model_selection"
+            model_name = get_model_name(values, self.MODEL_SELECTION_BLOCK_ID)
+
+            parameters = self.collect_parameters(values, model_name, user_id)
             logger.info(f"Model: {model_name}, parameters: {parameters}")
-            user_prompt = None
-            for block_id, block_values in values.items():
-                if block_id.endswith('_prompt'):
-                    action_id = list(block_values.keys())[0]
-                    user_prompt = block_values[action_id]['value']
-                    break
+            print(f"Loaded parameters: {parameters}")
+            user_prompt = find_user_prompt(values)
             if user_prompt is None:
                 logger.error("Failed to find prompt")
                 return
 
             # Store the last used parameters and values
-            save_last_used_values(user_id, values)
+            save_last_used_values(user_id, model_name, values)
             logger.info(f"Last User Parameters: {values}")
+
+            # After updating last_parameters
+            last_parameters = load_last_used_values(user_id, model_name)
+            print(f"Updated last_parameters: {last_parameters}")
             
             model_id = self.models[model_name]["_model_id"]
             channel_id = self.user_dict.get(body['user']['id'])
-            client.chat_postEphemeral(channel=channel_id, user=user_id, text="Creating " + user_prompt + ", please wait...")
-            urls = create_custom_images(model_id, parameters, self.models)
-            message = ""
-            for url in urls:
-                message += f"{url}\n"
+            client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"Creating {user_prompt}, please wait...")
+            urls = create_custom_images(model_id, last_parameters, self.models)
+            message = "\n".join(urls)
+            
             if urls:  # Check if urls is not empty
                 url = urls[0]  # Extract the first URL from the list
                 trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}")
@@ -321,7 +324,13 @@ class LangchainHandler:
                         "text": "Select a model"
                     },
                     "options": model_options,
-                    "initial_option": model_options[0]  # select the first model by default
+                    "initial_option": {
+                        "text": {
+                            "type": "plain_text",
+                            "text": selected_model
+                        },
+                        "value": selected_model
+                    }
                 }
             }
 
@@ -330,15 +339,89 @@ class LangchainHandler:
 
         return blocks
 
-def save_last_used_values(user_id, last_used_values):
-    config_file_path = get_config_file_path(f'{user_id}.json')
-    with open(config_file_path, 'w') as f:
-        json.dump(last_used_values, f)       
+    def get_value_for_parameter(self, user_id, model_name, parameter_name):
+        last_used_values = load_last_used_values(user_id, model_name)
+        parameter_block_id = f'{model_name}_{parameter_name}'
+        if parameter_block_id in last_used_values:
+            parameter_action_id = list(last_used_values[parameter_block_id].keys())[0]
+            parameter_value = last_used_values[parameter_block_id][parameter_action_id].get('value')
+            if parameter_value is None:
+                parameter_value = last_used_values[parameter_block_id][parameter_action_id]['selected_option']['value']
+        else:
+            parameter_value = self.models[model_name][parameter_name]["default"]
+            
+        if self.models[model_name][parameter_name]["type"] == "integer":
+            parameter_value = int(parameter_value)
+        elif self.models[model_name][parameter_name]["type"] == "number":
+            parameter_value = float(parameter_value)
+        return parameter_value
 
-def load_last_used_values(user_id):
+    def collect_parameters(self, values: Dict[str, Any], model_name: str, user_id: str) -> Dict[str, Any]:
+        parameters = {}
+        for parameter_block_id, parameter_details in values.items():
+            if parameter_block_id != self.MODEL_SELECTION_BLOCK_ID:
+                model_name, parameter_name = parameter_block_id.replace("-", " ").split('_', 1)
+                parameter_value = self.get_value_for_parameter(user_id, model_name, parameter_name)
+                parameters[parameter_name] = parameter_value
+        print("collect_parameters called")
+        print(parameters)
+        return parameters
+
+
+
+def save_last_used_values(user_id, model_name, values):
+    # Load all previously saved values.
+    user_values = load_all_values(user_id)
+
+    # Update the values for this model.
+    user_values[model_name] = values
+    print(f"Saved user values: {user_values}")
+    # Save the updated values.
+    with open(get_config_file_path(f'{user_id}.json'), 'w') as file:
+        json.dump(user_values, file)
+
+def load_last_used_values(user_id, model_name):
+    last_parameters_all_models = load_all_values(user_id)
+    model_parameters = last_parameters_all_models.get(model_name, {})
+    # Construct a dictionary of the model's parameters with the unique identifiers removed
+    last_used_values = {}
+    for key, value in model_parameters.items():
+        # Get the parameter name by splitting at underscores and removing the last part
+        parameter_name_parts = key.split('_')[:-1]
+        # Join the parts together to form the parameter name
+        parameter_name = '_'.join(parameter_name_parts)
+        # Get the parameter value by getting the 'value' field from the value dictionary
+        parameter_value = value.get('type')
+        if parameter_value == 'plain_text_input':
+            last_used_values[parameter_name] = value.get('value')
+        elif parameter_value == 'static_select':
+            last_used_values[parameter_name] = value['selected_option'].get('value')
+    return last_used_values
+
+
+def load_all_values(user_id):
+    print("load_all_values called")
     try:
-        config_file_path = get_config_file_path(f'{user_id}.json')
-        with open(config_file_path, 'r') as f:
-            return json.load(f)
+        with open(get_config_file_path(f'{user_id}.json')) as file:
+            return json.load(file)
     except FileNotFoundError:
-        return {}  # or some default values
+        return {}
+
+def extract_values_from_body(body: Dict[str, Any]) -> Dict[str, Any]:
+    user_id = body['user']['id']
+    values = body['view']['state']['values']
+    return user_id, values
+
+def get_model_name(values: Dict[str, Any], model_selection_block_id: str) -> str:
+    model_selection_action_id = list(values[model_selection_block_id].keys())[0]
+    model_name = values[model_selection_block_id][model_selection_action_id]['selected_option']['value']
+    return model_name
+
+def find_user_prompt(values: Dict[str, Any]) -> str:
+    user_prompt = None
+    for block_id, block_values in values.items():
+        if block_id.endswith('_prompt'):
+            action_id = list(block_values.keys())[0]
+            user_prompt = block_values[action_id]['value']
+            break
+    return user_prompt

@@ -52,7 +52,9 @@ def create_image(prompt):
     return url
 
 def create_custom_images(model_id: str, parameters: Dict[str, str], models):
-    """Run a specific Replicate Model with custom parameters and return a URL from config"""
+    """Run a specific Replicate Model with custom parameters and return a URL from
+    config"""
+    print(f"parameters inside create_custom_images: {parameters}")
     print("Creating custom image...")
     # Prepare the input for the model
     input_parameters = {}

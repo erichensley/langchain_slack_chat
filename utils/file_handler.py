@@ -126,3 +126,12 @@ def randomize_words(text):
     randomized_text = ' '.join(words)
 
     return randomized_text
+
+def print_step(step_number, step_name):
+    print("\033[96mStep {}\033[0m".format(step_number))
+    print("\033[93m{}\033[0m".format(step_name))
+    print("\033[35m{}\033[0m".format('-' * 30))
+
+def format_dictionary(dictionary):
+    for key, value in dictionary.items():
+        print(f'{key}: {value}')

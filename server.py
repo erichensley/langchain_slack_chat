@@ -69,21 +69,22 @@ def make_image(ack, respond, command):
 def open_custom_image_modal(ack, body, client):
     ack()
     #langchain_handler.trigger_modal(body["channel_id"], members)'')
-    langchain_handler.open_custom_image_modal(ack, body, client)
+    langchain_handler.step1_open_custom_image_modal(ack, body, client)
 @app.view("")
-def handle_modal_submission(ack, body, client, logger):
+def step3_handle_submission(ack, body, client, logger):
     ack()
-    langchain_handler.handle_modal_submission(body, client, logger)
+    langchain_handler.step3_handle_submission(body, client, logger)
 
 @app.action("model_selected")
 def handle_model_selection(ack, body, client):
     ack()
+    user_id = body['user']['id']
     last_parameters = body['view']['state']['values']
     last_prompt = last_parameters.get("prompt")
     selected_model = last_parameters['model_selection']['model_selected']['selected_option']['value']
     print(f"model_selected Selected model: {selected_model}")
     print(f"model_selected Last parameters: {last_parameters}")
-    blocks = langchain_handler.generate_modal_blocks(selected_model, last_parameters, last_prompt)
+    blocks = langchain_handler.step2_generate_modal_blocks(selected_model, last_prompt, user_id)
     print(f"model_selected Blocks: {blocks}")
     client.views_update(
         view_id=body['view']['id'],

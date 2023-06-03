@@ -51,19 +51,28 @@ def create_image(prompt):
     url = generate_image_url(download_and_save_image(output))
     return url
 
-def create_custom_images(model_id: str, parameters: Dict[str, str], models):
+def create_custom_images(model_id: str, parameters: Dict[str, Dict[str, str]]):
     """Run a specific Replicate Model with custom parameters and return a URL from
     config"""
     print(f"parameters inside create_custom_images: {parameters}")
     print("Creating custom image...")
     # Prepare the input for the model
     input_parameters = {}
+    schema = {'prompt': 'string', 'num_inference_steps': 'integer', 'guidance_scale': 'number', 'prior_cf_scale': 'integer', 'scheduler': 'string'}
+    # Get the first (and only) key-value pair in the dictionary
+    _, model_parameters = next(iter(parameters.items()))
 
-    # The prompt parameter is common for all models
-    input_parameters["prompt"] = parameters.pop("prompt", "default prompt")
-    # Add the rest of the parameters
-    for parameter, value in parameters.items():
-        input_parameters[parameter] = value
+    # Copy the parameters for this model and convert types based on schema
+    for key, value in model_parameters.items():
+        try:
+            if schema[key] == 'integer':
+                input_parameters[key] = int(value)
+            elif schema[key] == 'number':
+                input_parameters[key] = float(value)
+            else:
+                input_parameters[key] = value
+        except KeyError:
+            raise ValueError(f"Unexpected parameter '{key}' encountered. Please check your model parameters.")
 
     print(f"Model ID: {model_id}, Input Parameters: {input_parameters}")
 
@@ -74,6 +83,14 @@ def create_custom_images(model_id: str, parameters: Dict[str, str], models):
     urls.append(url)
     return urls
 
+
+
+    # Run the model and get the output
+    output = rep.run(model_id, input=input_parameters)
+    urls = []
+    url = generate_image_url(download_and_save_image(output))
+    urls.append(url)
+    return urls
 
 def download_and_save_image(image_url):
     try:

@@ -135,3 +135,18 @@ def print_step(step_number, step_name):
 def format_dictionary(dictionary):
     for key, value in dictionary.items():
         print(f'{key}: {value}')
+
+def print_color(text, color):
+    color_dict = {
+        'g': '\033[92m',  # Green
+        'b': '\033[94m',  # Blue
+        'c': '\033[96m',  # Cyan
+        'm': '\033[95m',  # Magenta
+        'y': '\033[93m',  # Yellow
+        'r': '\033[91m',  # Red
+        'w': '\033[0m',   # White
+    }
+    if color in color_dict:
+        print(f"{color_dict[color]}{text}\033[0m")
+    else:
+        print("Invalid color. Please choose from g, b, c, m, y, r, or w.")

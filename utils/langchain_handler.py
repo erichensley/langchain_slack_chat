@@ -6,6 +6,7 @@ import copy
 import typing
 import traceback
 import json
+import time
 from typing import List, Union, Dict, Any
 from langchain.agents import Tool, AgentExecutor, LLMSingleActionAgent, AgentOutputParser, initialize_agent, AgentType
 from langchain.memory import ConversationBufferMemory
@@ -14,7 +15,7 @@ from langchain.utilities import GoogleSearchAPIWrapper, WikipediaAPIWrapper
 from langchain.schema import AgentAction, AgentFinish, HumanMessage
 from langchain.prompts import BaseChatPromptTemplate
 from langchain.tools import tool
-from utils.file_handler import load_json, read_from_file, get_config_file_path, print_step, format_dictionary
+from utils.file_handler import load_json, read_from_file, get_config_file_path, print_step, print_color
 from utils.gpt3_helpers import get_username, replace_user_ids_with_names
 from utils.logging import setup_logging, log_message
 from utils.image_handler import create_custom_images, create_image, trigger_image_modal
@@ -139,7 +140,7 @@ class LangchainHandler:
 
     def step1_open_custom_image_modal(self, ack, body, client):
         ack()
-        print_step(1, 'Open Custom Image Modal')
+        #print_step(1, 'Open Custom Image Modal')
         # Store Channel ID and User ID in a dictionary
         self.user_dict[body['user_id']] = body['channel_id']
         user_id = body['user_id']
@@ -149,7 +150,7 @@ class LangchainHandler:
 
         # Get last used model
         selected_model = last_parameters_all_models.get('last_used_model', 'Kandinsky 2')
-        print(f"Open Custom Image Selected model: {selected_model}")
+        #print(f"Open Custom Image Selected model: {selected_model}")
         last_parameters = load_last_used_values(user_id, selected_model)
         #print("Open Custom Image last_parameters:")
         #format_dictionary(last_parameters)
@@ -157,14 +158,15 @@ class LangchainHandler:
         current_parameters = self.collect_parameters(last_parameters, selected_model, user_id)
         last_prompt = current_parameters.get("prompt")
 
-        print("Called step2_generate_modal_blocks")
-        print(selected_model)
-        #print(current_parameters)
-        print(last_prompt)
-        print(user_id)
+        # print("Called step2_generate_modal_blocks")
+        # print(selected_model)
+        # #print(current_parameters)
+        # print(last_prompt)
+        # print(user_id)
 
         # Generate the blocks for the selected model
         blocks = self.step2_generate_modal_blocks(selected_model, last_prompt, user_id)
+        #print(blocks)
         client.views_open(
             trigger_id=body["trigger_id"],
             view={
@@ -184,7 +186,7 @@ class LangchainHandler:
             )
         
     def step2_generate_modal_blocks(self, selected_model, last_prompt, user_id):
-        print_step(2, 'Open step2_generate_modal_blocks')
+        #print_step(2, 'Open step2_generate_modal_blocks')
         model_options = [
             {
                 "text": {
@@ -243,7 +245,7 @@ class LangchainHandler:
         Returns:
             List[Dict[str, Any]]: The generated blocks.
         """
-        print_step('2a', 'Open step2a_generate_model_blocks')
+        #print_step('2a', 'Open step2a_generate_model_blocks')
         # List to hold the generated blocks
         blocks: List[Dict[str, Any]] = []
 
@@ -279,14 +281,14 @@ class LangchainHandler:
         :param last_prompt: The last prompt.
         :return: The block.
         """
-        print_step('2b', 'Open step2b_generate_parameter_block')
-        print(f"Generating parameter for model: {model_name} - {parameter}")  # Debugging line
-        print("=========")
-        print(f"Parameter details:")  # Debugging line
-        print(details)
-        print(f"Values:") 
-        print(values) # Debugging line
-        print("=========")
+        # print_step('2b', 'Open step2b_generate_parameter_block')
+        # print(f"Generating parameter for model: {model_name} - {parameter}")  # Debugging line
+        # print("=========")
+        # print(f"Parameter details:")  # Debugging line
+        # print(details)
+        # print(f"Values:") 
+        # print(values) # Debugging line
+        # print("=========")
         initial_value = ""
         block = {
             "type": "input",
@@ -297,13 +299,21 @@ class LangchainHandler:
         }
         # Get the value of the parameter
         parameter_value = self.get_value_for_parameter(user_id, model_name, parameter)
-        print(f"Parameter value: {parameter_value}")  
+        # print(f"Parameter value: {parameter_value}")  
         
-        if details["type"] in ["text", "string", "integer", "number"]:
+        if parameter == "prompt":
+            initial_value = last_prompt or str(parameter_value)
+            block["element"] = {
+                "type": "plain_text_input",
+                "placeholder": {"type": "plain_text", "text": initial_value[:150]},
+                "initial_value": initial_value,
+                "multiline": True
+            }
+        elif details["type"] in ["text", "string", "integer", "number"]:
             initial_value = str(parameter_value)
             block["element"] = {
                 "type": "plain_text_input",
-                "placeholder": {"type": "plain_text", "text": initial_value},
+                "placeholder": {"type": "plain_text", "text": initial_value[:150]},
                 "initial_value": initial_value
             }
         elif details["type"] == "dropdown":
@@ -315,65 +325,72 @@ class LangchainHandler:
                 "options": options,
                 "initial_option": initial_option
             }
-        elif details["type"] == "prompt":
-            initial_value = last_prompt or str(parameter_value)
-            block["element"] = {
-                "type": "plain_text_input",
-                "placeholder": {"type": "plain_text", "text": initial_value},
-                "initial_value": initial_value
-            }
         else:
             print(f"Unknown type '{details['type']}' for parameter '{parameter}' in model '{model_name}'. Defaulting to 'plain_text_input'.")
             initial_value = str(parameter_value)
             block["element"] = {
                 "type": "plain_text_input",
-                "placeholder": {"type": "plain_text", "text": initial_value},
+                "placeholder": {"type": "plain_text", "text": initial_value[:150]},
                 "initial_value": initial_value
             }
 
         return block
 
-
     def step3_handle_submission(self, body, client, logger):
         try:
-            print_step('3', 'Open step3_handle_submission')
+            #print_step('3', 'Open step3_handle_submission')
             members = self.slack_members
             user_id, values = extract_values_from_body(body)
             logger.info(f"Values: {values}")
 
-            #model_selection_block_id = "model_selection"
             model_name = get_model_name(values, self.MODEL_SELECTION_BLOCK_ID)
-
             parameters = self.collect_parameters(values, model_name, user_id)
             logger.info(f"Model: {model_name}, parameters: {parameters}")
-            print(f"Loaded parameters: {parameters}")
+            #print(f"Loaded parameters: {parameters}")
+            
             user_prompt = find_user_prompt(values)
             if user_prompt is None:
                 logger.error("Failed to find prompt")
                 return
-
-            # Store the last used parameters and values
+            #print("Values before save:")
+            #print(values)
             save_last_used_values(user_id, model_name, values)
             logger.info(f"Last User Parameters: {values}")
 
-            # After updating last_parameters
             last_parameters = load_last_used_values(user_id, model_name)
-            print(f"Updated last_parameters: {last_parameters}")
+            #print(f"Updated last_parameters: {last_parameters}")
             
             model_id = self.models[model_name]["_model_id"]
             channel_id = self.user_dict.get(body['user']['id'])
             client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"Creating {user_prompt}, please wait...")
-            urls = create_custom_images(model_id, last_parameters)
-            message = "\n".join(urls)
+            
+            start_time = time.time()
+            result = create_custom_images(model_id, last_parameters)
+            urls = result['urls']
+            input_parameters = result['parameters']
+            elapsed_time = time.time() - start_time
+
+            # Remove 'prompt' from the dictionary
+            if 'prompt' in input_parameters:
+                del input_parameters['prompt']
+
+            # Convert the dictionary to your specific string format
+            parameter_message = " | ".join(f"{k}: {v}" for k, v in input_parameters.items())
+
+            # Now you can use 'parameter_message' in your message
+            message = f">*{user_prompt}*\n>{model_name}\n>{parameter_message}\n>_Generated in {elapsed_time:.2f} seconds._"
             
             if urls:  # Check if urls is not empty
                 url = urls[0]  # Extract the first URL from the list
                 trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}")
+                client.chat_postMessage(channel=channel_id, text=message)
             else:
                 respond(text="Failed to create an image. Please try again.", client=client)
         except Exception as e:
             logger.error(f"Failed to handle modal submission: {e}")
+            client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"There was an error while creating your image: {e}, please try again.")
             traceback.print_exc()
+
             
 
     def get_value_for_parameter(self, user_id, model_name, parameter_name):
@@ -392,7 +409,7 @@ class LangchainHandler:
             elif self.models[model_name][parameter_name]["type"] == "number":
                 parameter_value = float(parameter_value)
             
-            print(f"Parameter value for {parameter_name}: {parameter_value}")
+            #print(f"Parameter value for {parameter_name}: {parameter_value}")
             return parameter_value
 
         except KeyError as e:
@@ -405,9 +422,9 @@ class LangchainHandler:
         for parameter_name, parameter_value in values.items():
             if parameter_name != 'last_used_model':
                 parameters[parameter_name] = parameter_value
-        print("collect_parameters called")
+        #print("collect_parameters called")
         parameters = {model_name: parameters}  # Wrap the parameters inside a dictionary with the model name as the key
-        print(parameters)
+        #print(parameters)
         return parameters
 
 def save_last_used_values(user_id, model_name, values):
@@ -420,10 +437,15 @@ def save_last_used_values(user_id, model_name, values):
         if parameter.startswith(model_name):
             # For each parameter, get the actual value
             for action_id, action_details in parameter_details.items():
+                # Check if 'value' exists
                 if 'value' in action_details:
                     # The parameter name is derived by removing the model_name_ prefix
                     parameter_name = parameter.replace(f"{model_name}_", "")
                     new_values[parameter_name] = action_details['value']
+                # Check if 'selected_option' exists for handling cases like 'scheduler'
+                elif 'selected_option' in action_details:
+                    parameter_name = parameter.replace(f"{model_name}_", "")
+                    new_values[parameter_name] = action_details['selected_option']['value']
 
     # Update the values for this model.
     user_values[model_name] = new_values
@@ -432,6 +454,7 @@ def save_last_used_values(user_id, model_name, values):
     # Save the updated values.
     with open(get_config_file_path(f'{user_id}.json'), 'w') as file:
         json.dump(user_values, file)
+
 
 def load_last_used_values(user_id, model_name):
     last_parameters_all_models = load_all_values(user_id)

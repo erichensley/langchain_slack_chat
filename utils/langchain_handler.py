@@ -124,6 +124,12 @@ class LangchainHandler:
         self.slack_members = {}
         self.last_user_parameters = {}
 
+    def handle_image_modification_request(self, image_url, prompt):
+        # Call Replicate with the image URL and the prompt
+        # This is a placeholder. Replace it with the actual code to call Replicate.
+        result = replicate(image_url, prompt)
+        return result
+
     def update_members(self, new_value):
         self.slack_members = new_value
  

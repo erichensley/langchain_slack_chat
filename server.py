@@ -60,7 +60,9 @@ def handle_message_events(message, say):
             image_url = message["attachments"][0]["image_url"]
             prompt = message["text"].split(":", 1)[1].strip()
             # Call the new function in LangchainHandler to handle the image modification request
-            langchain_handler.handle_image_modification_request(image_url, prompt)
+            result = langchain_handler.handle_image_modification_request(image_url, prompt)
+            # Post the result in the thread
+            say(text=result, thread_ts=message["ts"])
 
 @app.command("/image")
 def make_image(ack, respond, command):

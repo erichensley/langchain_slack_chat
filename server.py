@@ -54,6 +54,8 @@ def feed_message_to_openai(message, ack):
 def handle_message_events(message, say):
     # Check if the message is a thread broadcast
     if message.get('subtype') == 'thread_broadcast':
+        # Print the message to the console
+        print(message)
         # Check if the message starts with the keyword "change"
         if message["text"].startswith("change:"):
             # Extract the image URL and the prompt from the message

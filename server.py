@@ -49,8 +49,8 @@ def feed_message_to_openai(message, say, ack):
 def handle_message_events(message, say, ack):
     ack()
     print(message)
-    # Check if the message is a thread broadcast
-    if message.get('subtype') == 'thread_broadcast':
+    # Check if the message is a thread reply
+    if "thread_ts" in message:
         # Check if the message starts with the keyword "change"
         if message["text"].startswith("change:"):
             # Extract the image URL and the prompt from the message
@@ -59,7 +59,10 @@ def handle_message_events(message, say, ack):
             # Call the new function in LangchainHandler to handle the image modification request
             result = langchain_handler.handle_image_modification_request(image_url, prompt)
             # Post the result in the thread
-            say(text=result, thread_ts=message["ts"])
+            say(text=result, thread_ts=message["thread_ts"])
+    else:
+        # Handle non-threaded messages here
+        pass
 
 @app.command("/image")
 def make_image(ack, respond, command):

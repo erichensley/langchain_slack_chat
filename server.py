@@ -50,6 +50,16 @@ def feed_message_to_openai(message, ack):
     ack()
     #langchain_handler.handle_message(message, members)
 
+@app.event("message.thread_broadcast")
+def handle_thread_replies(event, say):
+    # Check if the message starts with the keyword "change"
+    if event["text"].startswith("change:"):
+        # Extract the image URL and the prompt from the message
+        image_url = event["attachments"][0]["image_url"]
+        prompt = event["text"].split(":", 1)[1].strip()
+        # Call the new function in LangchainHandler to handle the image modification request
+        langchain_handler.handle_image_modification_request(image_url, prompt)
+
 @app.command("/image")
 def make_image(ack, respond, command):
     ack()

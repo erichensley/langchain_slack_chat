@@ -50,20 +50,14 @@ def create_image(prompt):
     try:
         print_color("Image Prompt: " + prompt, "b")
         model_image = replicate.models.get("stability-ai/sdxl").versions.get("2f779eb9b23b34fe171f8eaa021b8261566f0d2c10cd2674063e7dbcd351509e")
-        model_upscale = replicate.models.get("sczhou/codeformer").versions.get("7de2ea26c616d5bf2245ad0d5e24f0ff9a6204578a5c876db53142edd9d2cd56")
         # Measure time taken by rep.run()
         start_rep_run = time.time()
         image = model_image.predict(prompt=prompt, scheduler='KarrasDPM', refine='expert_ensemble_refiner')
         end_rep_run = time.time()
         print_color(f"Time taken by Image Creation: {end_rep_run - start_rep_run} seconds", "y")
-        start_rep_run = time.time()
-        output = model_upscale.predict(image=image, codeformer_fidelity = 0.1, background_enhance=True, face_upsample=True)
-        end_rep_run = time.time()
-        print_color(f"Time taken by Upscale: {end_rep_run - start_rep_run} seconds", "y")
-
         # Measure time taken by download_and_save_image() and generate_image_url()
         start_image_processing = time.time()
-        url = generate_image_url(download_and_save_image(output))
+        url = generate_image_url(download_and_save_image(image))
         end_image_processing = time.time()
         print_color(f"Time taken by download_and_save_image() and generate_image_url(): {end_image_processing - start_image_processing} seconds", "y")
 

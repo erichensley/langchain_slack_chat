@@ -76,7 +76,7 @@ def create_custom_images(model_id: str, parameters: Dict[str, Dict[str, str]]):
     #print("Creating custom image...")
     # Prepare the input for the model
     input_parameters = {}
-    schema = {'prompt': 'string', 'num_inference_steps': 'integer', 'guidance_scale': 'number', 'prior_cf_scale': 'integer', 'scheduler': 'string'}
+    schema = {'prompt': 'string', 'num_inference_steps': 'integer', 'guidance_scale': 'number', 'prior_cf_scale': 'integer', 'scheduler': 'string', 'refine': 'string'}
     # Get the first (and only) key-value pair in the dictionary
     _, model_parameters = next(iter(parameters.items()))
 

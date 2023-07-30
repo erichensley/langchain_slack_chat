@@ -388,7 +388,7 @@ class LangchainHandler:
             
             if urls:  # Check if urls is not empty
                 url = urls[0]  # Extract the first URL from the list
-                trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}", input_parameters, elapsed_time)
+                trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}", input_parameters, message)
                 #Removed to save space
                 #client.chat_postMessage(channel=channel_id, text=message)
             else:

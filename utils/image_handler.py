@@ -26,12 +26,12 @@ rep = replicate.Client(api_token=os.environ["REPLICATE_API_KEY"])
 
 
 
-def trigger_image_modal(channel_id, image_url, title, parameters):  # Update the function parameters
+def trigger_image_modal(channel_id, image_url, title, parameters, generation_time):  # Update the function parameters
     try:
         # Prepare the parameters string
         parameters_str = ' | '.join([f'{key}: {value}' for key, value in parameters.items()])
         # Prepare the title string
-        title_str = f"{title}\n{parameters_str}\nGenerated in 11.04 seconds."
+        title_str = f"{title}\n{parameters_str}\nGenerated in {generation_time:.2f} seconds."
         response = client.chat_postMessage(
             channel=channel_id,  # Use the channel_id here
             text="Here's your image:",

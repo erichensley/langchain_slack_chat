@@ -79,7 +79,7 @@ def make_image(ack, respond, command):
     generation_time = time.time() - start_time
     parameters = {"prompt": user_prompt}  # Add other parameters as needed
     if image_url:
-        trigger_image_modal(channel_id, image_url, title, parameters, generation_time)
+        trigger_image_modal(channel_id, image_url, title, parameters, username)
     else:
         respond(text="Failed to create an image. Please try again.")
 

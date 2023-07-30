@@ -33,7 +33,7 @@ def trigger_image_modal(channel_id, image_url, title, parameters, username, alt_
         # Prepare the title string
         title_str = f"{title}"
         # Prepare the alt_text string
-        alt_text = f"{username}: {title_str}" if alt_text is None else str(alt_text)
+        alt_text = f"{title_str}" if alt_text is None else str(alt_text)
         response = client.chat_postMessage(
             channel=channel_id,  # Use the channel_id here
             text="Here's your image:",

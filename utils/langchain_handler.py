@@ -384,7 +384,7 @@ class LangchainHandler:
             parameter_message = " | ".join(f"{k}: {v}" for k, v in input_parameters.items())
 
             # Now you can use 'parameter_message' in your message
-            message = f"*{user_prompt}*\n>{model_name}\n>{parameter_message}\n>_Generated in {elapsed_time:.2f} seconds._"
+            message = f"*{user_prompt}* {model_name}> {parameter_message}> {elapsed_time:.2f} seconds."
             
             if urls:  # Check if urls is not empty
                 url = urls[0]  # Extract the first URL from the list

@@ -384,12 +384,13 @@ class LangchainHandler:
             parameter_message = " | ".join(f"{k}: {v}" for k, v in input_parameters.items())
 
             # Now you can use 'parameter_message' in your message
-            message = f">*{user_prompt}*\n>{model_name}\n>{parameter_message}\n>_Generated in {elapsed_time:.2f} seconds._"
+            message = f"*{user_prompt}*\n>{model_name}\n>{parameter_message}\n>_Generated in {elapsed_time:.2f} seconds._"
             
             if urls:  # Check if urls is not empty
                 url = urls[0]  # Extract the first URL from the list
                 trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}", input_parameters, elapsed_time)
-                client.chat_postMessage(channel=channel_id, text=message)
+                #Removed to save space
+                #client.chat_postMessage(channel=channel_id, text=message)
             else:
                 respond(text="Failed to create an image. Please try again.", client=client)
         except Exception as e:

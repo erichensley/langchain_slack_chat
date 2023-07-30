@@ -73,9 +73,12 @@ def make_image(ack, respond, command):
     username = get_username(user_id,members)
     respond(text="Creating " + command["text"] + ", please wait...")
     title = username + ": " + command["text"]
+    start_time = time.time()
     image_url = langchain_handler.create_image(user_prompt)
+    generation_time = time.time() - start_time
+    parameters = {"prompt": user_prompt}  # Add other parameters as needed
     if image_url:
-        trigger_image_modal(channel_id, image_url, title)
+        trigger_image_modal(channel_id, image_url, title, parameters, generation_time)
     else:
         respond(text="Failed to create an image. Please try again.")
 

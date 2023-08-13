@@ -26,17 +26,23 @@ rep = replicate.Client(api_token=os.environ["REPLICATE_API_KEY"])
 
 
 
-def trigger_image_modal(channel_id, image_url, title):  # Update the function parameters
+def trigger_image_modal(channel_id, image_url, title, parameters,alt_text=None):  # Update the function parameters
     try:
+        # Prepare the parameters string
+        parameters_str = ' | '.join([f'{key}: {value}' for key, value in parameters.items()])
+        # Prepare the title string
+        title_str = f"{title}"
+        # Prepare the alt_text string
+        alt_text = f"{title_str}" if alt_text is None else str(alt_text)
         response = client.chat_postMessage(
             channel=channel_id,  # Use the channel_id here
             text="Here's your image:",
             blocks=[
                 {
                     "type": "image",
-                    "title": {"type": "plain_text", "text": title},
+                    "title": {"type": "plain_text", "text": title_str},
                     "image_url": image_url,
-                    "alt_text": "Generated image:  " + title,
+                    "alt_text": alt_text,
                 }
             ],
         )
@@ -82,7 +88,7 @@ def create_custom_images(model_id: str, parameters: Dict[str, Dict[str, str]]):
     #print("Creating custom image...")
     # Prepare the input for the model
     input_parameters = {}
-    schema = {'prompt': 'string', 'num_inference_steps': 'integer', 'guidance_scale': 'number', 'prior_cf_scale': 'integer', 'scheduler': 'string'}
+    schema = {'prompt': 'string', 'num_inference_steps': 'integer', 'num_inference_steps_prior': 'integer', 'guidance_scale': 'number', 'prior_cf_scale': 'integer', 'scheduler': 'string', 'high_noise_frac': 'number', 'refine_steps': 'integer', 'refine': 'string'}
     # Get the first (and only) key-value pair in the dictionary
     _, model_parameters = next(iter(parameters.items()))
 

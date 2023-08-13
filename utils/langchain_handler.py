@@ -124,6 +124,12 @@ class LangchainHandler:
         self.slack_members = {}
         self.last_user_parameters = {}
 
+    def handle_image_modification_request(self, image_url, prompt):
+        # Call Replicate with the image URL and the prompt
+        # This is a placeholder. Replace it with the actual code to call Replicate.
+        result = replicate(image_url, prompt)
+        return result
+
     def update_members(self, new_value):
         self.slack_members = new_value
  
@@ -378,12 +384,18 @@ class LangchainHandler:
             parameter_message = " | ".join(f"{k}: {v}" for k, v in input_parameters.items())
 
             # Now you can use 'parameter_message' in your message
-            message = f">*{user_prompt}*\n>{model_name}\n>{parameter_message}\n>_Generated in {elapsed_time:.2f} seconds._"
+            message = f"*{user_prompt}* {model_name}> {parameter_message}> {elapsed_time:.2f} seconds."
             
             if urls:  # Check if urls is not empty
                 url = urls[0]  # Extract the first URL from the list
+<<<<<<< HEAD
                 trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt} - {elapsed_time:.2f}s")
                 # client.chat_postMessage(channel=channel_id, text=message)
+=======
+                trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}", input_parameters, message)
+                #Removed to save space
+                #client.chat_postMessage(channel=channel_id, text=message)
+>>>>>>> release/5
             else:
                 respond(text="Failed to create an image. Please try again.", client=client)
         except Exception as e:

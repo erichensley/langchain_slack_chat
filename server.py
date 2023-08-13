@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 import configparser
 import json
@@ -46,9 +47,23 @@ def feed_message_to_openai(message, say, ack):
     say(response_text)
 
 @app.message(".*")
-def feed_message_to_openai(message, ack):
+def handle_message_events(message, say, ack):
     ack()
-    #langchain_handler.handle_message(message, members)
+    print(message)
+    # Check if the message is a thread reply
+    if "thread_ts" in message:
+        # Check if the message starts with the keyword "change"
+        if message["text"].startswith("change:"):
+            # Extract the image URL and the prompt from the message
+            image_url = message["attachments"][0]["image_url"]
+            prompt = message["text"].split(":", 1)[1].strip()
+            # Call the new function in LangchainHandler to handle the image modification request
+            result = langchain_handler.handle_image_modification_request(image_url, prompt)
+            # Post the result in the thread
+            say(text=result, thread_ts=message["thread_ts"])
+    else:
+        # Handle non-threaded messages here
+        pass
 
 @app.command("/image")
 def make_image(ack, respond, command):
@@ -59,9 +74,12 @@ def make_image(ack, respond, command):
     username = get_username(user_id,members)
     respond(text="Creating " + command["text"] + ", please wait...")
     title = username + ": " + command["text"]
+    start_time = time.time()
     image_url = langchain_handler.create_image(user_prompt)
+    generation_time = time.time() - start_time
+    parameters = {"prompt": user_prompt}  # Add other parameters as needed
     if image_url:
-        trigger_image_modal(channel_id, image_url, title)
+        trigger_image_modal(channel_id, image_url, title, parameters, title)
     else:
         respond(text="Failed to create an image. Please try again.")
 

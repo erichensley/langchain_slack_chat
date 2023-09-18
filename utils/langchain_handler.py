@@ -388,14 +388,9 @@ class LangchainHandler:
             
             if urls:  # Check if urls is not empty
                 url = urls[0]  # Extract the first URL from the list
-<<<<<<< HEAD
-                trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt} - {elapsed_time:.2f}s")
-                # client.chat_postMessage(channel=channel_id, text=message)
-=======
                 trigger_image_modal(channel_id, url, f"{get_username(user_id, members)}: {user_prompt}", input_parameters, message)
                 #Removed to save space
                 #client.chat_postMessage(channel=channel_id, text=message)
->>>>>>> release/5
             else:
                 respond(text="Failed to create an image. Please try again.", client=client)
         except Exception as e:

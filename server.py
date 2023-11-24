@@ -88,6 +88,25 @@ def open_custom_image_modal(ack, body, client):
     ack()
     #langchain_handler.trigger_modal(body["channel_id"], members)'')
     langchain_handler.step1_open_custom_image_modal(ack, body, client)
+
+@app.command("/punchout")
+def make_punchout_image(ack, respond, command):
+    ack()
+    user_prompt = command["text"]
+    channel_id = command["channel_id"]
+    user_id = command["user_id"]
+    username = get_username(user_id,members)
+    respond(text="Creating " + command["text"] + ", please wait...")
+    title = username + ": " + command["text"]
+    start_time = time.time()
+    image_url = langchain_handler.create_punchout_image(user_prompt)
+    generation_time = time.time() - start_time
+    parameters = {"prompt": user_prompt}  # Add other parameters as needed
+    if image_url:
+        trigger_image_modal(channel_id, image_url, title, parameters, title)
+    else:
+        respond(text="Failed to create an image. Please try again.")
+
 @app.view("")
 def step3_handle_submission(ack, body, client, logger):
     ack()

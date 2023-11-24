@@ -18,7 +18,7 @@ from langchain.tools import tool
 from utils.file_handler import load_json, read_from_file, get_config_file_path, print_step, print_color
 from utils.gpt3_helpers import get_username, replace_user_ids_with_names
 from utils.logging import setup_logging, log_message
-from utils.image_handler import create_custom_images, create_image, trigger_image_modal
+from utils.image_handler import create_custom_images, create_image, trigger_image_modal, create_punchout_image
 
 # Set up Prompt
 prompt = read_from_file("config/prompt.txt").strip()
@@ -143,6 +143,9 @@ class LangchainHandler:
 
     def create_image(self, user_prompt):
         return create_image(user_prompt)
+
+    def create_punchout_image(self, user_prompt):
+        return create_punchout_image(user_prompt)
 
     def step1_open_custom_image_modal(self, ack, body, client):
         ack()

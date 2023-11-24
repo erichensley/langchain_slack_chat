@@ -7,6 +7,8 @@ import uuid
 import shutil
 from typing import Dict
 import replicate
+import json
+import random
 from slack_sdk import WebClient
 
 from utils.file_handler import get_config_file_path, get_images_path, generate_image_url, print_color
@@ -113,6 +115,42 @@ def create_custom_images(model_id: str, parameters: Dict[str, Dict[str, str]]):
     url = generate_image_url(download_and_save_image(output))
     urls.append(url)
     return {'urls': urls, 'parameters': input_parameters}
+
+def create_punchout_image(prompt):
+    """Run Replicate Model and return URL from config"""
+    start_time = time.time()
+
+    try:
+        # Read the list of image URLs from the JSON file
+        with open('./config/images.json', 'r') as file:
+            image_urls = json.load(file)
+
+        # Select a random image URL from the list
+        random_image_url = random.choice(image_urls)
+
+        print_color("Image Prompt: " + prompt, "b")
+        model_image = replicate.models.get("erichensley/punchout").versions.get("4bef70785622244a57baae893cb9470a3d85e23d8514f3e999f2c9a004bfca21")
+
+        # Use the randomly selected image URL in the model prediction
+        start_rep_run = time.time()
+        image = model_image.predict(prompt="In the style of TOK, " + prompt, width=512, height=368, guidance_scale=6, lora_scale=0.7, disable_safety_checker=True, image=random_image_url)
+        output = image
+        end_rep_run = time.time()
+
+        print_color(f"Time taken by Image Creation: {end_rep_run - start_rep_run} seconds", "y")
+
+        start_image_processing = time.time()
+        url = generate_image_url(download_and_save_image(output))
+        end_image_processing = time.time()
+
+        print_color(f"Time taken by download_and_save_image() and generate_image_url(): {end_image_processing - start_image_processing} seconds", "y")
+        print_color(f"Total time taken by create_image(): {time.time() - start_time} seconds", "y")
+
+        return url
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Traceback:")
+        print(traceback.format_exc())
 
 def download_and_save_image(image_url):
     try:
